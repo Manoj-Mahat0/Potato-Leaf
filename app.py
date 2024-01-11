@@ -35,20 +35,31 @@ def read_file_as_image(data) -> np.ndarray:
     return image
 
 @app.post("/predict")
-async def predict(
-    file: UploadFile = File(...)
-):
-    image = read_file_as_image(await file.read())
-    img_batch = np.expand_dims(image, 0)
-    
-    predictions = MODEL.predict(img_batch)
+async def predict(file: UploadFile = File(...)):
+    try:
+        # Read the file as an image
+        image = read_file_as_image(await file.read())
 
-    predicted_class = CLASS_NAMES[np.argmax(predictions[0])]
-    confidence = np.max(predictions[0])
-    return {
-        'class': predicted_class,
-        'confidence': float(confidence)
-    }
+        # Resize the image to match the expected input shape of the model (256x256)
+        resized_image = tf.image.resize(image, (256, 256))
+
+        # Expand dimensions to create a batch of size 1
+        img_batch = np.expand_dims(resized_image, 0)
+
+        # Make predictions
+        predictions = MODEL.predict(img_batch)
+
+        # Get the predicted class and confidence
+        predicted_class = CLASS_NAMES[np.argmax(predictions[0])]
+        confidence = float(np.max(predictions[0]))
+
+        return {
+            'class': predicted_class,
+            'confidence': confidence
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host='0.0.0.0', port=8000, debug=True)
